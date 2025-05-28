@@ -9,6 +9,7 @@ composeFoundation = "1.4.1"
 wearToolingPreview = "1.0.0"
 activityCompose = "1.10.1"
 coreSplashscreen = "1.0.1"
+uiTextGoogleFonts = "1.8.2"
 
 [libraries]
 androidx-material3-android = { module = "androidx.compose.material3:material3-android", version.ref = "material3Android" }
@@ -27,6 +28,7 @@ activity-compose = { group = "androidx.activity", name = "activity-compose", ver
 core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 
+androidx-ui-text-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts", version.ref = "uiTextGoogleFonts" }
 
 
 [plugins]

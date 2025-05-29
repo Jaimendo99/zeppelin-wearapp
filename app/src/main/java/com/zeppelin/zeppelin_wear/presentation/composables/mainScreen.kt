@@ -48,9 +48,6 @@ import com.zeppelin.zeppelin_wear.presentation.theme.displayFontFamily
 @Composable
 fun MainScreen(
     screenState: ScreenUiState,
-    timerPercentage: Float = 0f,
-    minutes: Int = 0,
-    seconds: Int = 0
 ) {
     Scaffold(
         timeText = { TimeText(modifier = Modifier.offset(y = (10).dp)) },

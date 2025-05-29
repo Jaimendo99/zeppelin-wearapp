@@ -10,6 +10,7 @@ wearToolingPreview = "1.0.0"
 activityCompose = "1.10.1"
 coreSplashscreen = "1.0.1"
 uiTextGoogleFonts = "1.8.2"
+koin-bom = "3.5.5"
 
 [libraries]
 androidx-material3-android = { module = "androidx.compose.material3:material3-android", version.ref = "material3Android" }
@@ -27,6 +28,14 @@ wear-tooling-preview = { group = "androidx.wear", name = "wear-tooling-preview",
 activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+
+# Koin
+koin-bom = { module = "io.insert-koin:koin-bom", version.ref = "koin-bom" }
+koin-android = { module = "io.insert-koin:koin-android" }
+koin-androidx-compose = { module = "io.insert-koin:koin-androidx-compose"}
+koin-androidx-workmanager = { module = "io.insert-koin:koin-androidx-workmanager" }
+
 
 androidx-ui-text-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts", version.ref = "uiTextGoogleFonts" }
 

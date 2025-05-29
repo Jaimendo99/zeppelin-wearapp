@@ -58,6 +58,14 @@ dependencies {
     debugImplementation(libs.ui.test.manifest)
     implementation(libs.androidx.material3.android)
 
+    //    koin dependencies
+    implementation(platform(libs.koin.bom))
+    implementation(libs.koin.android)
+    implementation(libs.koin.androidx.compose)
+    implementation(libs.koin.androidx.workmanager)
+
+
+
     implementation(libs.androidx.ui.text.google.fonts)
 
 

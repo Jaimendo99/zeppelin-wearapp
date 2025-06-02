@@ -3,6 +3,7 @@ package com.zeppelin.zeppelin_wear.di
 import android.content.Context
 import android.hardware.SensorManager
 import com.zeppelin.zeppelin_wear.presentation.MainViewModel
+import com.zeppelin.zeppelin_wear.sensors.ActivityMonitor
 import com.zeppelin.zeppelin_wear.sensors.HeartRateMonitor
 import com.zeppelin.zeppelin_wear.sensors.OnWristDetector
 import com.zeppelin.zeppelin_wear.services.MonitoringService
@@ -19,6 +20,7 @@ val appModule = module {
 val sensorsModule = module {
     single { OnWristDetector(get()) }
     single { HeartRateMonitor(get()) }
+    single { ActivityMonitor(get()) }
     single { MonitoringService() }
 }
 

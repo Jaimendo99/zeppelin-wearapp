@@ -16,18 +16,22 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.zeppelin.zeppelin_wear.MainActivity
 import com.zeppelin.zeppelin_wear.R
+import com.zeppelin.zeppelin_wear.sensors.ActivityMonitor
 import com.zeppelin.zeppelin_wear.sensors.HeartRateMonitor
 import com.zeppelin.zeppelin_wear.sensors.OnWristDetector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
 class MonitoringService: Service() {
@@ -45,12 +49,17 @@ class MonitoringService: Service() {
         private val _currentHeartRateBpm = MutableStateFlow<Int?>(null)
         val currentHeartRateBpm: StateFlow<Int?> = _currentHeartRateBpm.asStateFlow()
 
+        private val _recentMovementDetected = MutableStateFlow<Boolean>(false)
+        val recentMovementDetected: StateFlow<Boolean> = _recentMovementDetected.asStateFlow()
+
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val onWristDetector: OnWristDetector by inject()
     private val heartRateMonitor: HeartRateMonitor by inject()
+    private val activityMonitor: ActivityMonitor by inject()
 
+    private var movementResetJob: Job? = null // To reset the movement flag
 
     override fun onCreate() {
         super.onCreate()
@@ -105,9 +114,28 @@ class MonitoringService: Service() {
             Log.e(TAG, "Heart rate sensor not available.")
             _currentHeartRateBpm.value = null
         }
+
+        if (activityMonitor.isSensorAvailable()) {
+            activityMonitor.significantMovementDetected
+                .onEach { magnitude ->
+                    Log.i(TAG, "Service: Significant movement detected (Magnitude: $magnitude)")
+                    _recentMovementDetected.value = true // Set flag
+
+                    movementResetJob?.cancel()
+                    movementResetJob = serviceScope.launch {
+                        delay(5000)
+                        _recentMovementDetected.value = false
+                    }
+                }
+                .catch { e -> Log.e(TAG, "Error in activityMonitor flow", e) }
+                .launchIn(serviceScope)
+        } else {
+            Log.e(TAG, "Activity (accelerometer) sensor not available.")
+        }
     }
 
     private fun stopMonitoring() {
+        movementResetJob?.cancel()
         serviceScope.cancel()
         stopSelf()
         Log.d(TAG, "Monitoring stopped.")

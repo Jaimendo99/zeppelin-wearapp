@@ -21,8 +21,8 @@ import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,7 +31,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -55,21 +54,22 @@ import kotlinx.coroutines.delay
 @Composable
 fun MainScreen(
     mainViewModel: MainViewModel
-){
+) {
     val screenState by mainViewModel.screenUiState.collectAsState()
-    val context = LocalContext.current
+    val heartRate by mainViewModel.currentHeartRate.collectAsState()
 
     LaunchedEffect(Unit) {
         delay(5000)
         mainViewModel.startMonitoringService()
     }
 
-    MainPageLayout(screenState)
+    MainPageLayout(screenState, heartRate)
 }
 
 @Composable
 fun MainPageLayout(
     screenState: ScreenUiState,
+    heartRate: Int? = null
 ) {
     Scaffold(
         timeText = { TimeText(modifier = Modifier.offset(y = (10).dp)) },
@@ -79,14 +79,14 @@ fun MainPageLayout(
             contentAlignment = Alignment.Center
         ) {
             when (screenState) {
-                is ScreenUiState.PhoneNotConnected, is  ScreenUiState.PhoneConnected,
-                ScreenUiState.SessionIdle -> {
-                    NormalScreenLayout(screenState)
-            }
+                is ScreenUiState.PhoneNotConnected, is ScreenUiState.PhoneConnected,
+                ScreenUiState.SessionIdle, ScreenUiState.OnWristOff -> {
+                    NormalScreenLayout(screenState, heartRate)
+                }
+
                 is ScreenUiState.SessionWork, is ScreenUiState.SessionBreak -> {
                     SessionScreen(screenState)
                 }
-                ScreenUiState.OnWristOff -> { NormalScreenLayout(screenState) }
             }
         }
     }
@@ -99,10 +99,10 @@ fun SessionScreen(
     mainScreenState: ScreenUiState,
 ) {
 
-    when(mainScreenState){
+    when (mainScreenState) {
         is ScreenUiState.SessionWork, is ScreenUiState.SessionBreak -> {
 
-            val timerState = when(mainScreenState) {
+            val timerState = when (mainScreenState) {
                 is ScreenUiState.SessionWork -> mainScreenState.timerState
                 is ScreenUiState.SessionBreak -> mainScreenState.timerState
                 else -> return
@@ -198,7 +198,10 @@ fun SessionScreen(
                 }
             }
         }
-        else -> { return }
+
+        else -> {
+            return
+        }
     }
 
 }
@@ -206,7 +209,7 @@ fun SessionScreen(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun NormalScreenLayout(state: ScreenUiState = ScreenUiState.SessionIdle) {
+fun NormalScreenLayout(state: ScreenUiState = ScreenUiState.SessionIdle, heartRate: Int? = null) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -237,7 +240,7 @@ fun NormalScreenLayout(state: ScreenUiState = ScreenUiState.SessionIdle) {
                 )
             }
         }
-        ZeppelinLogo(modifier = Modifier.align(Alignment.BottomCenter))
+        ZeppelinLogo(modifier = Modifier.align(Alignment.BottomCenter), heartRate = heartRate)
     }
 }
 
@@ -269,13 +272,16 @@ fun PhoneConnectedIcon() {
 }
 
 @Composable
-fun ZeppelinLogo(modifier: Modifier = Modifier) {
+fun ZeppelinLogo(modifier: Modifier = Modifier, heartRate: Int? = null) {
+    if (heartRate == null)
     Icon(
         painter = painterResource(R.drawable.logo_on_dark),
         contentDescription = "Zeppelin Logo",
         modifier = modifier.size(48.dp),
         tint = MaterialTheme.colorScheme.background
     )
+    else
+        Text("$heartRate", modifier = modifier.size(48.dp))
 }
 
 
@@ -376,14 +382,16 @@ fun MainScreenPreview6() {
 @Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
 fun MainScreenPreview3() {
     ZeppelinTheme {
-        MainPageLayout(screenState = ScreenUiState.SessionWork(
-            timerState = com.zeppelin.zeppelin_wear.data.TimerState(
-                timerPercentage = 50f,
-                minutes = 25,
-                seconds = 30,
-                isRunning = true
+        MainPageLayout(
+            screenState = ScreenUiState.SessionWork(
+                timerState = com.zeppelin.zeppelin_wear.data.TimerState(
+                    timerPercentage = 50f,
+                    minutes = 25,
+                    seconds = 30,
+                    isRunning = true
+                )
             )
-        ))
+        )
     }
 }
 
@@ -391,13 +399,15 @@ fun MainScreenPreview3() {
 @Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
 fun MainScreenPreview4() {
     ZeppelinTheme {
-        MainPageLayout(ScreenUiState.SessionBreak(
-            timerState = com.zeppelin.zeppelin_wear.data.TimerState(
-                timerPercentage = 75f,
-                minutes = 5,
-                seconds = 15,
-                isRunning = true
+        MainPageLayout(
+            ScreenUiState.SessionBreak(
+                timerState = com.zeppelin.zeppelin_wear.data.TimerState(
+                    timerPercentage = 75f,
+                    minutes = 5,
+                    seconds = 15,
+                    isRunning = true
+                )
             )
-        ))
+        )
     }
 }

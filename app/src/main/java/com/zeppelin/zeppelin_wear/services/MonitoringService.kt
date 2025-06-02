@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.zeppelin.zeppelin_wear.MainActivity
 import com.zeppelin.zeppelin_wear.R
+import com.zeppelin.zeppelin_wear.sensors.HeartRateMonitor
 import com.zeppelin.zeppelin_wear.sensors.OnWristDetector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,16 +41,19 @@ class MonitoringService: Service() {
 
         private val _isOnWristState = MutableStateFlow<Boolean?>(null)
         val isOnWristState: StateFlow<Boolean?> = _isOnWristState.asStateFlow()
+
+        private val _currentHeartRateBpm = MutableStateFlow<Int?>(null)
+        val currentHeartRateBpm: StateFlow<Int?> = _currentHeartRateBpm.asStateFlow()
+
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val onWristDetector: OnWristDetector by inject()
+    private val heartRateMonitor: HeartRateMonitor by inject()
 
 
     override fun onCreate() {
         super.onCreate()
-
-
 
         Log.d(TAG, "Service onCreate")
         createNotificationChannel()
@@ -75,65 +79,78 @@ class MonitoringService: Service() {
 
 
     private fun startMonitoring() {
-        if (!onWristDetector.isSensorAvailable()) {
-            Log.e(TAG, "On-wrist sensor not available. Cannot start monitoring.")
+        if (onWristDetector.isSensorAvailable()) {
+            onWristDetector.isOnWrist
+                .onEach { isOnWrist ->
+                    Log.i(TAG, "Service: On-wrist status updated: $isOnWrist")
+                    _isOnWristState.value = isOnWrist
+                    updateNotification(isOnWrist, _currentHeartRateBpm.value)
+                }
+                .catch { e -> Log.e(TAG, "Error in onWristDetector flow", e); _isOnWristState.value = null }
+                .launchIn(serviceScope)
+        } else {
+            Log.e(TAG, "On-wrist sensor not available.")
             _isOnWristState.value = null
-            return
         }
-
-        onWristDetector.isOnWrist .onEach { isOnWrist ->
-                Log.i(TAG, "Service: On-wrist status updated: $isOnWrist")
-                _isOnWristState.value = isOnWrist
-                updateNotification(isOnWrist)
-            }
-            .catch { e ->
-                Log.e(TAG, "Error in onWristDetector flow", e)
-                _isOnWristState.value = null // Indicate error
-            }
-            .launchIn(serviceScope)
+        if (heartRateMonitor.isSensorAvailable()) {
+            heartRateMonitor.heartRateBpm
+                .onEach { bpm ->
+                    Log.i(TAG, "Service: Heart Rate BPM: $bpm")
+                    _currentHeartRateBpm.value = bpm
+                    _isOnWristState.value?.let { updateNotification(it, bpm) }
+                }
+                .catch { e -> Log.e(TAG, "Error in heartRateMonitor flow", e); _currentHeartRateBpm.value = null }
+                .launchIn(serviceScope)
+        } else {
+            Log.e(TAG, "Heart rate sensor not available.")
+            _currentHeartRateBpm.value = null
+        }
     }
 
     private fun stopMonitoring() {
-        serviceScope.cancel() // Cancels all coroutines in this scope
+        serviceScope.cancel()
         stopSelf()
         Log.d(TAG, "Monitoring stopped.")
     }
 
-    private fun createNotification(isOnWrist: Boolean? = null): Notification {
+    private fun createNotification(isOnWrist: Boolean? = _isOnWristState.value, heartRate: Int? = _currentHeartRateBpm.value): Notification {
         val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val pendingIntentFlags =
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
         val pendingIntent = PendingIntent.getActivity(
             this, 0, notificationIntent, pendingIntentFlags
         )
 
-        val statusText = when (isOnWrist) {
-            true -> "Device is ON wrist"
-            false -> "Device is OFF wrist"
-            null -> "Monitoring..."
+        val statusText = StringBuilder()
+        when (isOnWrist) {
+            true -> statusText.append("ON wrist")
+            false -> statusText.append("OFF wrist")
+            null -> statusText.append("Wrist: Unknown")
+        }
+        heartRate?.let {
+            statusText.append(" | HR: $it bpm")
+        } ?: run {
+            statusText.append(" | HR: N/A")
         }
 
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Focus Session Active")
-            .setContentText(statusText)
+            .setContentText(statusText.toString())
             .setSmallIcon(R.drawable.logo_on_dark) // Replace with your app icon
             .setContentIntent(pendingIntent)
-            .setOngoing(true) // Makes it a foreground notification
+            .setOngoing(true)
             .build()
     }
 
 
-    private fun updateNotification(isOnWrist: Boolean) {
+    private fun updateNotification(isOnWrist: Boolean, heartRate: Int?) {
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
         ) {
             NotificationManagerCompat.from(this)
-                .notify(NOTIFICATION_ID, createNotification(isOnWrist))
+                .notify(NOTIFICATION_ID, createNotification(isOnWrist, heartRate))
         } else {
             Log.w(TAG, "POST_NOTIFICATIONS permission not granted. Cannot update notification.")
         }

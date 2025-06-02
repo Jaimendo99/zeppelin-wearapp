@@ -31,6 +31,13 @@ class MainViewModel() : ViewModel(){
             initialValue = null
         )
 
+    val currentHeartRate: StateFlow<Int?> = MonitoringService.currentHeartRateBpm
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     init {
         try{
             updateState()

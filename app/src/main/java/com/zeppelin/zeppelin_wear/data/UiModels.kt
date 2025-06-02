@@ -3,6 +3,7 @@ package com.zeppelin.zeppelin_wear.data
 sealed class ScreenUiState(open val message: String) {
     object PhoneNotConnected : ScreenUiState(message = "Conectar Teléfono")
     object PhoneConnected : ScreenUiState(message =  "Conexión Establecida")
+    object OnWristOff: ScreenUiState("Reloj Fuera de la Muñeca")
     object SessionIdle : ScreenUiState("Sesión Inactiva")
     data class SessionWork(val timerState: TimerState): ScreenUiState("Sesión de Trabajo")
     data class SessionBreak(val timerState: TimerState): ScreenUiState("Sesión de Descanso")

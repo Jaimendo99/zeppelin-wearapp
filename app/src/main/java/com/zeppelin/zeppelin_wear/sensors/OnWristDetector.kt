@@ -1,6 +1,5 @@
 package com.zeppelin.zeppelin_wear.sensors
 
-import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -13,10 +12,9 @@ import kotlinx.coroutines.launch
 
 class OnWristDetector(
     private val sensorManager: SensorManager,
-    private val context: Context
 ) {
     companion object {
-        private val TAG = OnWristDetector::class.java.name
+        private val TAG = "OnWristDetector"
     }
 
     private val onWristSensor: Sensor? =

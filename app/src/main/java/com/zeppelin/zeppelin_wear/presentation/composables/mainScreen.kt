@@ -19,7 +19,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +31,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -42,11 +46,29 @@ import androidx.wear.compose.material.TimeText
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.zeppelin.zeppelin_wear.R
 import com.zeppelin.zeppelin_wear.data.ScreenUiState
+import com.zeppelin.zeppelin_wear.presentation.MainViewModel
 import com.zeppelin.zeppelin_wear.presentation.theme.ZeppelinTheme
 import com.zeppelin.zeppelin_wear.presentation.theme.displayFontFamily
+import kotlinx.coroutines.delay
+
 
 @Composable
 fun MainScreen(
+    mainViewModel: MainViewModel
+){
+    val screenState by mainViewModel.screenUiState.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        delay(5000)
+        mainViewModel.startMonitoringService()
+    }
+
+    MainPageLayout(screenState)
+}
+
+@Composable
+fun MainPageLayout(
     screenState: ScreenUiState,
 ) {
     Scaffold(
@@ -60,14 +82,16 @@ fun MainScreen(
                 is ScreenUiState.PhoneNotConnected, is  ScreenUiState.PhoneConnected,
                 ScreenUiState.SessionIdle -> {
                     NormalScreenLayout(screenState)
-                }
+            }
                 is ScreenUiState.SessionWork, is ScreenUiState.SessionBreak -> {
                     SessionScreen(screenState)
                 }
+                ScreenUiState.OnWristOff -> { NormalScreenLayout(screenState) }
             }
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -206,6 +230,7 @@ fun NormalScreenLayout(state: ScreenUiState = ScreenUiState.SessionIdle) {
             when (state) {
                 is ScreenUiState.PhoneNotConnected -> PhoneNotConnectedIcon()
                 is ScreenUiState.PhoneConnected -> PhoneConnectedIcon()
+                is ScreenUiState.OnWristOff -> WristOffIcon()
                 else -> ContainedLoadingIndicator(
                     modifier = Modifier.size(48.dp),
                     indicatorColor = MaterialTheme.colorScheme.secondaryContainer
@@ -214,6 +239,15 @@ fun NormalScreenLayout(state: ScreenUiState = ScreenUiState.SessionIdle) {
         }
         ZeppelinLogo(modifier = Modifier.align(Alignment.BottomCenter))
     }
+}
+
+@Composable
+fun WristOffIcon() {
+    Image(
+        painter = painterResource(R.drawable.watch_off),
+        contentDescription = "Phone not connected",
+        modifier = Modifier.size(48.dp)
+    )
 }
 
 @Composable
@@ -306,34 +340,43 @@ fun OuterRing(
 
 
 @Composable
-@Preview(device = WearDevices.SMALL_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
+@Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
 fun MainScreenPreview() {
     ZeppelinTheme {
-        MainScreen(ScreenUiState.PhoneNotConnected)
+        MainPageLayout(ScreenUiState.PhoneNotConnected)
     }
 }
 
 @Composable
-@Preview(device = WearDevices.SMALL_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
+@Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
 fun MainScreenPreview1() {
     ZeppelinTheme {
-        MainScreen(ScreenUiState.PhoneConnected)
+        MainPageLayout(ScreenUiState.PhoneConnected)
     }
 }
 
 @Composable
-@Preview(device = WearDevices.SMALL_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
+@Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
 fun MainScreenPreview2() {
     ZeppelinTheme {
-        MainScreen(ScreenUiState.SessionIdle)
+        MainPageLayout(ScreenUiState.SessionIdle)
+    }
+}
+
+
+@Composable
+@Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
+fun MainScreenPreview6() {
+    ZeppelinTheme {
+        MainPageLayout(ScreenUiState.OnWristOff)
     }
 }
 
 @Composable
-@Preview(device = WearDevices.SMALL_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
+@Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
 fun MainScreenPreview3() {
     ZeppelinTheme {
-        MainScreen(screenState = ScreenUiState.SessionWork(
+        MainPageLayout(screenState = ScreenUiState.SessionWork(
             timerState = com.zeppelin.zeppelin_wear.data.TimerState(
                 timerPercentage = 50f,
                 minutes = 25,
@@ -345,10 +388,10 @@ fun MainScreenPreview3() {
 }
 
 @Composable
-@Preview(device = WearDevices.SMALL_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
+@Preview(device = WearDevices.LARGE_ROUND, showSystemUi = true, backgroundColor = 0xFF000000)
 fun MainScreenPreview4() {
     ZeppelinTheme {
-        MainScreen(ScreenUiState.SessionBreak(
+        MainPageLayout(ScreenUiState.SessionBreak(
             timerState = com.zeppelin.zeppelin_wear.data.TimerState(
                 timerPercentage = 75f,
                 minutes = 5,

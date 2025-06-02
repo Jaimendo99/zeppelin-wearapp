@@ -48,6 +48,9 @@ class MonitoringService: Service() {
 
     override fun onCreate() {
         super.onCreate()
+
+
+
         Log.d(TAG, "Service onCreate")
         createNotificationChannel()
     }

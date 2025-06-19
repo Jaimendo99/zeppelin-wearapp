@@ -16,15 +16,19 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.zeppelin.zeppelin_wear.MainActivity
 import com.zeppelin.zeppelin_wear.R
+import com.zeppelin.zeppelin_wear.communication.PhoneCommunicator
 import com.zeppelin.zeppelin_wear.sensors.ActivityMonitor
 import com.zeppelin.zeppelin_wear.sensors.HeartRateMonitor
 import com.zeppelin.zeppelin_wear.sensors.OnWristDetector
+import com.zeppelin.zeppelin_wear.util.onMeanCount
+import com.zeppelin.zeppelin_wear.util.windowed
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,22 +46,20 @@ class MonitoringService: Service() {
         const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
         private const val NOTIFICATION_ID = 123
         private const val NOTIFICATION_CHANNEL_ID = "monitoring_channel"
+        private const val HEART_RATE_WINDOW_SIZE = 20 // Number of heart rate samples to average
 
         private val _isOnWristState = MutableStateFlow<Boolean?>(null)
         val isOnWristState: StateFlow<Boolean?> = _isOnWristState.asStateFlow()
 
         private val _currentHeartRateBpm = MutableStateFlow<Int?>(null)
         val currentHeartRateBpm: StateFlow<Int?> = _currentHeartRateBpm.asStateFlow()
-
-        private val _recentMovementDetected = MutableStateFlow<Boolean>(false)
-        val recentMovementDetected: StateFlow<Boolean> = _recentMovementDetected.asStateFlow()
-
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val onWristDetector: OnWristDetector by inject()
     private val heartRateMonitor: HeartRateMonitor by inject()
     private val activityMonitor: ActivityMonitor by inject()
+    private val phoneCommunicator: PhoneCommunicator by inject() // Inject communicator
 
     private var movementResetJob: Job? = null // To reset the movement flag
 
@@ -86,49 +88,23 @@ class MonitoringService: Service() {
         return START_STICKY
     }
 
-
     private fun startMonitoring() {
         if (onWristDetector.isSensorAvailable()) {
-            onWristDetector.isOnWrist
-                .onEach { isOnWrist ->
-                    Log.i(TAG, "Service: On-wrist status updated: $isOnWrist")
-                    _isOnWristState.value = isOnWrist
-                    updateNotification(isOnWrist, _currentHeartRateBpm.value)
-                }
-                .catch { e -> Log.e(TAG, "Error in onWristDetector flow", e); _isOnWristState.value = null }
-                .launchIn(serviceScope)
+            onWristDetectorMonitoring(onWristDetector.isOnWrist)
         } else {
             Log.e(TAG, "On-wrist sensor not available.")
             _isOnWristState.value = null
         }
+
         if (heartRateMonitor.isSensorAvailable()) {
-            heartRateMonitor.heartRateBpm
-                .onEach { bpm ->
-                    Log.i(TAG, "Service: Heart Rate BPM: $bpm")
-                    _currentHeartRateBpm.value = bpm
-                    _isOnWristState.value?.let { updateNotification(it, bpm) }
-                }
-                .catch { e -> Log.e(TAG, "Error in heartRateMonitor flow", e); _currentHeartRateBpm.value = null }
-                .launchIn(serviceScope)
+            onHearRateMonitoring(heartRateMonitor.heartRateBpm)
         } else {
             Log.e(TAG, "Heart rate sensor not available.")
             _currentHeartRateBpm.value = null
         }
 
         if (activityMonitor.isSensorAvailable()) {
-            activityMonitor.significantMovementDetected
-                .onEach { magnitude ->
-                    Log.i(TAG, "Service: Significant movement detected (Magnitude: $magnitude)")
-                    _recentMovementDetected.value = true // Set flag
-
-                    movementResetJob?.cancel()
-                    movementResetJob = serviceScope.launch {
-                        delay(5000)
-                        _recentMovementDetected.value = false
-                    }
-                }
-                .catch { e -> Log.e(TAG, "Error in activityMonitor flow", e) }
-                .launchIn(serviceScope)
+            activityMonitoring(activityMonitor.significantMovementDetected)
         } else {
             Log.e(TAG, "Activity (accelerometer) sensor not available.")
         }
@@ -141,6 +117,49 @@ class MonitoringService: Service() {
         Log.d(TAG, "Monitoring stopped.")
     }
 
+    private fun onWristDetectorMonitoring(isOnWrist: Flow<Boolean>){
+        isOnWrist.onEach { isOnWrist ->
+                Log.i(TAG, "Service: On-wrist status updated: $isOnWrist")
+                _isOnWristState.value = isOnWrist
+                updateNotification(isOnWrist, _currentHeartRateBpm.value)
+                serviceScope.launch {
+                    if (isOnWrist) phoneCommunicator.sendOnWristEvent()
+                    else phoneCommunicator.sendOffWristEvent()
+                }
+            }
+            .catch { e -> Log.e(TAG, "Error in onWristDetector flow", e); _isOnWristState.value = null }
+            .launchIn(serviceScope)
+    }
+ 
+    private fun onHearRateMonitoring(heartRateBpm: Flow<Int>){
+        heartRateBpm.onEach { bpm ->
+                Log.i(TAG, "Service: Heart Rate BPM: $bpm")
+                _currentHeartRateBpm.value = bpm
+                _isOnWristState.value?.let { updateNotification(it, bpm) }
+            }
+            .windowed(HEART_RATE_WINDOW_SIZE).onEach {
+                phoneCommunicator.sendHeartRateSummary(
+                    it.last(),
+                    it.size,
+                    it.average().toFloat()
+                )
+            }
+            .catch { e -> Log.e(TAG, "Error in heartRateMonitor flow", e); _currentHeartRateBpm.value = null }
+            .launchIn(serviceScope)
+    }
+
+    private fun  activityMonitoring(significantMovementDetected: Flow<Float>) {
+        significantMovementDetected.onMeanCount(5) { it.sum()/it.size }
+            .onEach { magnitude ->
+                Log.i(TAG, "Service: Significant movement detected (Magnitude: $magnitude)")
+                movementResetJob?.cancel()
+                movementResetJob = serviceScope.launch { delay(5000) }
+                phoneCommunicator.sendMovementDetectedEvent(magnitude)
+            }
+            .catch { e -> Log.e(TAG, "Error in activityMonitor flow", e) }
+            .launchIn(serviceScope)
+    }
+    
     private fun createNotification(isOnWrist: Boolean? = _isOnWristState.value, heartRate: Int? = _currentHeartRateBpm.value): Notification {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntentFlags =
@@ -170,7 +189,6 @@ class MonitoringService: Service() {
             .build()
     }
 
-
     private fun updateNotification(isOnWrist: Boolean, heartRate: Int?) {
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -199,6 +217,5 @@ class MonitoringService: Service() {
     override fun onBind(p0: Intent?): IBinder? {
        return null
     }
-
-
 }
+

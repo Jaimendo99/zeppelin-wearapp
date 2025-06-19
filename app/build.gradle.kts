@@ -9,7 +9,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.zeppelin.zeppelin_wear"
+        applicationId = "com.zeppelin.app"
         minSdk = 30
         targetSdk = 35
         versionCode = 1
@@ -64,9 +64,10 @@ dependencies {
     implementation(libs.koin.androidx.compose)
     implementation(libs.koin.androidx.workmanager)
 
+    implementation(libs.play.services.wearable)
 
+    implementation(libs.kotlinx.coroutines.play.services)
 
     implementation(libs.androidx.ui.text.google.fonts)
-
 
 }

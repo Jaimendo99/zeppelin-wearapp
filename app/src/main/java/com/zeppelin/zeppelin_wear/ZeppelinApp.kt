@@ -2,6 +2,7 @@ package com.zeppelin.zeppelin_wear
 
 import android.app.Application
 import com.zeppelin.zeppelin_wear.di.appModule
+import com.zeppelin.zeppelin_wear.di.communicationModule
 import com.zeppelin.zeppelin_wear.di.mainViewModel
 import com.zeppelin.zeppelin_wear.di.sensorsModule
 import org.koin.android.ext.koin.androidContext
@@ -20,7 +21,8 @@ class ZeppelinApp : Application(), KoinComponent {
             modules(
                 appModule,
                 sensorsModule,
-                mainViewModel
+                mainViewModel,
+                communicationModule
             )
         }
     }

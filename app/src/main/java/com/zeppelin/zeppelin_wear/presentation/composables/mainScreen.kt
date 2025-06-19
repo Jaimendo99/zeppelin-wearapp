@@ -58,11 +58,6 @@ fun MainScreen(
     val screenState by mainViewModel.screenUiState.collectAsState()
     val heartRate by mainViewModel.currentHeartRate.collectAsState()
 
-    LaunchedEffect(Unit) {
-        delay(5000)
-        mainViewModel.startMonitoringService()
-    }
-
     MainPageLayout(screenState, heartRate)
 }
 

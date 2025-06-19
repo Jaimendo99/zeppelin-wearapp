@@ -6,11 +6,19 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.bluetooth.BluetoothManager
+import android.bluetooth.le.AdvertiseCallback
+import android.bluetooth.le.AdvertiseData
+import android.bluetooth.le.AdvertiseSettings
+import android.bluetooth.le.BluetoothLeAdvertiser
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
+import android.os.ParcelUuid
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -37,6 +45,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
+import java.util.UUID
 
 class MonitoringService: Service() {
 
@@ -47,6 +56,7 @@ class MonitoringService: Service() {
         private const val NOTIFICATION_ID = 123
         private const val NOTIFICATION_CHANNEL_ID = "monitoring_channel"
         private const val HEART_RATE_WINDOW_SIZE = 20 // Number of heart rate samples to average
+        private val SERVICE_UUID = UUID.fromString( "0000feed-0000-1000-8000-00805f9b34fb" )
 
         private val _isOnWristState = MutableStateFlow<Boolean?>(null)
         val isOnWristState: StateFlow<Boolean?> = _isOnWristState.asStateFlow()
@@ -63,6 +73,18 @@ class MonitoringService: Service() {
 
     private var movementResetJob: Job? = null // To reset the movement flag
 
+
+
+    private var advertiser: BluetoothLeAdvertiser? = null
+    private val advertiseCallback = object : AdvertiseCallback() {
+        override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
+            Log.d(TAG, "BLE advertising started")
+        }
+        override fun onStartFailure(errorCode: Int) {
+            Log.e(TAG, "BLE advertising failed: $errorCode")
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
 
@@ -71,16 +93,19 @@ class MonitoringService: Service() {
     }
 
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_ADVERTISE)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START_SERVICE -> {
                 Log.d(TAG, "Starting Monitoring Service")
                 startForeground(NOTIFICATION_ID, createNotification())
                 startMonitoring()
+                startBleAdvertising()
             }
             ACTION_STOP_SERVICE -> {
                 Log.d(TAG, "Stopping Monitoring Service")
                 stopMonitoring()
+                stopBleAdvertising()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -108,6 +133,13 @@ class MonitoringService: Service() {
         } else {
             Log.e(TAG, "Activity (accelerometer) sensor not available.")
         }
+    }
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_ADVERTISE)
+    override fun onDestroy() {
+        // ensure BLE is stopped if service is killed
+        stopBleAdvertising()
+        super.onDestroy()
     }
 
     private fun stopMonitoring() {
@@ -213,6 +245,43 @@ class MonitoringService: Service() {
         manager.createNotificationChannel(channel)
     }
 
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_ADVERTISE)
+    private fun startBleAdvertising() {
+        val btMgr = getSystemService(Context.BLUETOOTH_SERVICE)
+                as BluetoothManager
+        val adapter = btMgr.adapter
+        if (!adapter.isMultipleAdvertisementSupported) {
+            Log.e(TAG, "Peripheral mode unsupported on this device")
+            return
+        }
+        advertiser = adapter.bluetoothLeAdvertiser
+        if (advertiser == null) {
+            Log.e(TAG, "bluetoothLeAdvertiser == null")
+            return
+        }
+        val settings = AdvertiseSettings.Builder()
+            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+            .setTxPowerLevel(
+                AdvertiseSettings.ADVERTISE_TX_POWER_HIGH
+            )
+            .setConnectable(false)
+            .build()
+
+        val data = AdvertiseData.Builder()
+            .addServiceUuid(ParcelUuid(SERVICE_UUID))
+            .setIncludeDeviceName(true)
+            .build()
+
+        advertiser!!.startAdvertising(
+            settings, data, advertiseCallback
+        )
+    }
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_ADVERTISE)
+    private fun stopBleAdvertising() {
+        advertiser?.stopAdvertising(advertiseCallback)
+    }
 
     override fun onBind(p0: Intent?): IBinder? {
        return null

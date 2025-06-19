@@ -32,11 +32,6 @@ class MyWatchListenerService : WearableListenerService() {
                }
                context.startService(serviceIntent) // Can use startService to send stop command
            }
-            "command/START_BLE_ADVERTISING" -> {
-                Log.d(TAG, "Watch: Start BLE advertising command received")
-
-
-            }
            else -> { Log.d(TAG, "Watch: Unhandled message) path: ${messageEvent.path}") }
         }
     }
